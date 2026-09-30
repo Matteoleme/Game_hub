@@ -111,6 +111,18 @@ Implementate le partite multiple nella stessa room:
 La room viene ancora chiusa esclusivamente dall'host tramite l'azione esplicita
 di chiusura.
 
+## Milestone 9
+
+Implementata la riconnessione robusta:
+
+- refresh browser con ripristino della room tramite player cookie e room code locale;
+- sessione guest ripristinata senza account host;
+- sessione host ripristinata tramite cookie autenticato e player cookie;
+- Socket.IO riconnesso automaticamente con sincronizzazione room autorizzata;
+- disconnessione temporanea non distrugge player, partita o punteggi;
+- disconnessione tardiva di una vecchia socket non sovrascrive la nuova connessione;
+- room invalidata o chiusa rimossa automaticamente dal ripristino locale.
+
 ## Milestone 7
 
 Implementati reveal e scoring Aneddoti:

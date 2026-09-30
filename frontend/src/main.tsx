@@ -15,6 +15,7 @@ type RevealVote = { voterPlayerId: string; voterNickname: string; targetPlayerId
 type RevealStory = { id: string; text: string; authorPlayerId: string; authorNickname: string; votes: RevealVote[] };
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "";
+const roomStorageKey = "game-hub-room-code";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
@@ -47,10 +48,26 @@ function AuthPage() {
   const [room, setRoom] = useState<Room | null>(null);
 
   useEffect(() => {
-    request<AuthResponse>("/api/auth/me")
-      .then(({ user: currentUser }) => setUser(currentUser))
-      .catch(() => undefined)
-      .finally(() => setLoading(false));
+    async function restoreSession() {
+      try {
+        const { user: currentUser } = await request<AuthResponse>("/api/auth/me");
+        setUser(currentUser);
+      } catch {
+        // Guests have no host session, but can still restore through player cookie.
+      }
+      const storedCode = window.localStorage.getItem(roomStorageKey);
+      if (storedCode) {
+        try {
+          const restoredRoom = await request<Room>(`/api/rooms/${storedCode}`);
+          setRoom(restoredRoom);
+        } catch {
+          window.localStorage.removeItem(roomStorageKey);
+        }
+      }
+      setLoading(false);
+    }
+
+    void restoreSession();
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -79,7 +96,7 @@ function AuthPage() {
   }
 
   if (room) {
-    return <RoomLobby room={room} isHost={Boolean(user)} onExit={() => setRoom(null)} />;
+    return <RoomLobby room={room} isHost={Boolean(user)} onExit={() => { window.localStorage.removeItem(roomStorageKey); setRoom(null); }} />;
   }
 
   return (
@@ -95,7 +112,7 @@ function AuthPage() {
           <div className="auth-panel">
             <p className="panel-label">HOST AUTENTICATO</p>
             <strong>{user.email}</strong>
-            <RoomCreator onCreated={setRoom} />
+            <RoomCreator onCreated={(createdRoom) => { window.localStorage.setItem(roomStorageKey, createdRoom.code); setRoom(createdRoom); }} />
             <button type="button" onClick={logout}>Esci</button>
           </div>
         ) : (
@@ -110,7 +127,7 @@ function AuthPage() {
             <button className="submit-button" type="submit" disabled={loading}>{loading ? "Attendi..." : mode === "login" ? "Accedi" : "Crea account"}</button>
           </form>
         )}
-        {!user && <GuestJoin onJoined={setRoom} />}
+        {!user && <GuestJoin onJoined={(joinedRoom) => { window.localStorage.setItem(roomStorageKey, joinedRoom.code); setRoom(joinedRoom); }} />}
         <div className="status-row" role="status">
           <span className="status-dot" aria-hidden="true" />
           Foundation online

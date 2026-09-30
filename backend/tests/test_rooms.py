@@ -39,6 +39,10 @@ async def test_create_and_join_room_enforces_unique_nickname() -> None:
     assert duplicate.status_code == 409
     assert duplicate.json()["detail"]["code"] == "NICKNAME_ALREADY_EXISTS"
     assert len(joined.json()["players"]) == 2
+    refreshed = await guest.get(f"/api/rooms/{code}")
+    assert refreshed.status_code == 200
+    assert refreshed.json()["code"] == code
+    assert {player["nickname"] for player in refreshed.json()["players"]} == {"Mario", "Luca"}
 
 
 @pytest.mark.asyncio
@@ -70,3 +74,22 @@ async def test_only_host_can_close_room_and_room_stays_after_disconnect() -> Non
     assert closed.status == "CLOSED"
     with pytest.raises(RoomError, match="chiusa"):
         room_manager.get_room(room.code)
+
+
+def test_reconnection_keeps_player_and_ignores_stale_socket_disconnect() -> None:
+    room, token = room_manager.create_room("host", "Host")
+    first_connection = room_manager.connect_player(token, "socket-old")
+    second_connection = room_manager.connect_player(token, "socket-new")
+
+    assert first_connection is not None
+    assert second_connection is not None
+    assert room.players[room.host_player_id].connected is True
+    assert room.players[room.host_player_id].socket_id == "socket-new"
+    assert room_manager.disconnect_socket("socket-old") is None
+    assert room.players[room.host_player_id].connected is True
+    assert room.players[room.host_player_id].socket_id == "socket-new"
+
+    disconnected = room_manager.disconnect_socket("socket-new")
+    assert disconnected is not None
+    assert room.players[room.host_player_id].connected is False
+    assert room.players[room.host_player_id].socket_id is None
