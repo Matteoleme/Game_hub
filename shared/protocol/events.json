@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Game Hub protocol foundation",
+  "description": "Initial protocol boundary. Domain event schemas are added with their milestones.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "0.1.0"
+    },
+    "transport": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["http", "socket.io"]
+      }
+    }
+  },
+  "required": ["version", "transport"],
+  "additionalProperties": false
+}
