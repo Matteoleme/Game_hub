@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from app.game.models import Game
+from app.game.modes.anecdotes import public_state
 from app.game.modes.registry import ModeDescriptor
 from app.rooms.models import Room
 
@@ -19,6 +20,7 @@ class GameResponse(BaseModel):
     phase: str
     started_at: datetime
     finished_at: datetime | None
+    mode_state: dict
 
 
 class GameModeResponse(BaseModel):
@@ -38,6 +40,7 @@ def game_response(game: Game | None) -> GameResponse | None:
         phase=game.phase,
         started_at=game.started_at,
         finished_at=game.finished_at,
+        mode_state=public_state(game) if game.mode == "anecdotes" else {},
     )
 
 

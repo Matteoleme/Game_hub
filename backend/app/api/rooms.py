@@ -14,6 +14,8 @@ from app.game.persistence import (
     persist_room_closed,
 )
 from app.game.schemas import SelectModeRequest
+from pydantic import Field
+from pydantic import BaseModel
 from app.rooms.manager import RoomError, room_manager
 from app.rooms.schemas import (
     CreateRoomRequest,
@@ -25,6 +27,10 @@ from app.rooms.schemas import (
 router = APIRouter(prefix="/rooms", tags=["rooms"])
 PLAYER_COOKIE_NAME = "game_hub_player"
 SessionDependency = Annotated[AsyncSession, Depends(get_session)]
+
+
+class StorySubmissionRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
 
 
 def room_error(error: RoomError) -> HTTPException:
@@ -197,4 +203,27 @@ async def finish_game(
     from app.socket_server import sio
 
     await sio.emit("game:finished", room_response(room).model_dump(mode="json"), room=room.code)
+    return room_response(room)
+
+
+@router.post("/{code}/story", response_model=RoomResponse)
+async def submit_story(
+    code: str,
+    payload: StorySubmissionRequest,
+    player_token: str | None = Cookie(default=None, alias=PLAYER_COOKIE_NAME),
+) -> RoomResponse:
+    player_result = room_manager.get_room_for_player_token(player_token)
+    if player_result is None or player_result[0].code != code.strip().upper():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "ROOM_ACCESS_REQUIRED", "message": "Accesso alla stanza richiesto."},
+        )
+    room, player = player_result
+    try:
+        game_manager.submit_anecdote(room, player.id, payload.text)
+    except RoomError as error:
+        raise room_error(error) from error
+    from app.socket_server import sio
+
+    await sio.emit("writing:updated", room_response(room).model_dump(mode="json"), room=room.code)
     return room_response(room)

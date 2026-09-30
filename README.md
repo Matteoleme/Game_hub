@@ -65,6 +65,21 @@ La milestone game hub aggiunge:
 Il game Aneddoti non contiene ancora scrittura, voto o reveal: queste regole
 arrivano nelle milestone 5, 6 e 7.
 
+## Milestone 5
+
+Implementata la fase di scrittura Aneddoti:
+
+- textarea mobile-first con limite da 1 a 500 caratteri;
+- submission autenticata dal player token;
+- un solo aneddoto per player, senza modifica o doppio invio;
+- testi conservati esclusivamente nello stato server del game;
+- progressione pubblica limitata a player pronti e numero totale;
+- transizione automatica `WRITING -> VOTING` quando tutti hanno inviato;
+- supporto REST `POST /api/rooms/{code}/story` e Socket.IO `story:submit`.
+
+La fase `VOTING` è soltanto il punto di arrivo della milestone: raccolta voti
+e reveal inizieranno rispettivamente nelle milestone 6 e 7.
+
 ## Avvio locale
 
 Prerequisiti: Python 3.12+ e Node.js 22+.

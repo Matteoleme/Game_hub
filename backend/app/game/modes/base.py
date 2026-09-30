@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from app.game.modes.anecdotes import create_state
+
 
 class GameMode(ABC):
     id: str
@@ -15,4 +17,4 @@ class AnecdotesMode(GameMode):
     name = "Aneddoti"
 
     def create_initial_state(self, player_ids: list[str]) -> dict:
-        return {"player_ids": player_ids}
+        return create_state(player_ids)

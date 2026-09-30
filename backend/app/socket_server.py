@@ -170,3 +170,23 @@ async def game_finish(sid: str) -> None:
     async with SessionFactory() as session:
         await persist_game_finished(session, finished_game)
     await sio.emit("game:finished", room_payload(room), room=room.code)
+
+
+@sio.on("story:submit")
+async def story_submit(sid: str, data: dict[str, Any] | None = None) -> None:
+    token = socket_tokens.get(sid)
+    result = room_manager.get_room_for_player_token(token)
+    if result is None:
+        await emit_room_error(sid)
+        return
+    text = (data or {}).get("text")
+    if not isinstance(text, str):
+        await emit_room_error(sid, RoomError("STORY_LENGTH_INVALID", "L'aneddoto deve contenere da 1 a 500 caratteri."))
+        return
+    room, player = result
+    try:
+        game_manager.submit_anecdote(room, player.id, text)
+    except RoomError as error:
+        await emit_room_error(sid, error)
+        return
+    await sio.emit("writing:updated", room_payload(room), room=room.code)

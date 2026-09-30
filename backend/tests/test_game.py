@@ -66,6 +66,34 @@ def test_game_requires_three_players() -> None:
         game_manager.start_game(room)
 
 
+def test_anecdotes_writing_is_validated_and_advances_after_all_submissions() -> None:
+    room = room_with_three_players()
+    game_manager.select_mode(room, "anecdotes")
+    game_manager.start_game(room)
+    player_ids = list(room.players)
+
+    progress = game_manager.submit_anecdote(room, player_ids[0], "  Una storia breve.  ")
+    assert progress == {
+        "phase": "WRITING",
+        "submittedPlayerIds": [player_ids[0]],
+        "totalPlayers": 3,
+    }
+
+    with pytest.raises(RoomError, match="gia inviato"):
+        game_manager.submit_anecdote(room, player_ids[0], "seconda versione")
+    with pytest.raises(RoomError, match="da 1 a 500"):
+        game_manager.submit_anecdote(room, player_ids[1], " ")
+    with pytest.raises(RoomError, match="player non appartiene"):
+        game_manager.submit_anecdote(room, "unknown", "test")
+
+    game_manager.submit_anecdote(room, player_ids[1], "Altra storia")
+    final_progress = game_manager.submit_anecdote(room, player_ids[2], "Ultima storia")
+    assert final_progress["phase"] == "VOTING"
+    assert set(final_progress["submittedPlayerIds"]) == set(player_ids)
+    assert room.current_game is not None
+    assert room.current_game.mode_state["submissions"][player_ids[0]] == "Una storia breve."
+
+
 @pytest.mark.asyncio
 async def test_api_persists_room_and_game_history() -> None:
     email = f"game-{uuid4()}@example.com"

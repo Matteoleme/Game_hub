@@ -7,7 +7,7 @@ import "./styles.css";
 type User = { id: string; email: string; created_at: string };
 type AuthResponse = { user: User };
 type Player = { id: string; nickname: string; is_host: boolean; connected: boolean; score: number };
-type Game = { id: string; room_id: string; mode: string; status: string; phase: string; started_at: string; finished_at: string | null };
+type Game = { id: string; room_id: string; mode: string; status: string; phase: string; started_at: string; finished_at: string | null; mode_state: Record<string, unknown> };
 type Room = { id: string; code: string; status: string; host_player_id: string; created_at: string; players: Player[]; selected_mode: string | null; current_game: Game | null; cumulative_scores: Record<string, number> };
 type GameMode = { id: string; name: string; available: boolean };
 
@@ -173,6 +173,7 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
   const [room, setRoom] = useState(initialRoom);
   const [modes, setModes] = useState<GameMode[]>([]);
   const [error, setError] = useState("");
+  const [storySubmitted, setStorySubmitted] = useState(false);
 
   useEffect(() => {
     request<GameMode[]>("/api/game-modes").then(setModes).catch(() => setError("Impossibile caricare le modalita."));
@@ -245,7 +246,20 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
           <div className="game-status">
             <p className="panel-label">PARTITA ATTIVA</p>
             <strong>{room.current_game.mode}</strong>
-            <span>Stato: {room.current_game.status}</span>
+            <span>Fase: {room.current_game.phase}</span>
+            {room.current_game.mode === "anecdotes" && room.current_game.phase === "WRITING" && (
+              <AnecdoteWriting
+                room={room}
+                disabled={storySubmitted}
+                onSubmitted={(updatedRoom) => {
+                  setStorySubmitted(true);
+                  setRoom(updatedRoom);
+                }}
+              />
+            )}
+            {room.current_game.mode === "anecdotes" && room.current_game.phase === "VOTING" && (
+              <p className="waiting-copy">Tutti gli aneddoti sono stati inviati. La votazione arrivera nella prossima milestone.</p>
+            )}
             {isHost && <button className="submit-button" type="button" onClick={finishGame}>Torna alla lobby</button>}
           </div>
         ) : isHost ? (
@@ -257,6 +271,41 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
         {isHost ? <button className="submit-button" type="button" onClick={closeRoom}>Chiudi stanza</button> : <button className="submit-button" type="button" onClick={leaveRoom}>Esci dalla stanza</button>}
       </section>
     </main>
+  );
+}
+
+function AnecdoteWriting({ room, disabled, onSubmitted }: { room: Room; disabled: boolean; onSubmitted: (room: Room) => void }) {
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  const progress = room.current_game?.mode_state as { submittedPlayerIds?: string[]; totalPlayers?: number } | undefined;
+  const submittedCount = progress?.submittedPlayerIds?.length ?? 0;
+  const totalPlayers = progress?.totalPlayers ?? room.players.length;
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    try {
+      const updatedRoom = await request<Room>(`/api/rooms/${room.code}/story`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+      onSubmitted(updatedRoom);
+      setText("");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Impossibile inviare l'aneddoto.");
+    }
+  }
+
+  return (
+    <form className="writing-panel" onSubmit={submit}>
+      <label>Qual e una cosa assurda che ti e successa?
+        <textarea value={text} onChange={(event) => setText(event.target.value)} maxLength={500} minLength={1} disabled={disabled} required />
+      </label>
+      <div className="writing-meta"><span>{text.length} / 500</span><span>{submittedCount} / {totalPlayers} inviati</span></div>
+      {disabled && <p className="waiting-copy">Aneddoto inviato. Attendi gli altri giocatori.</p>}
+      {error && <p className="form-error">{error}</p>}
+      {!disabled && <button className="submit-button" type="submit">Invia aneddoto</button>}
+    </form>
   );
 }
 

@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from app.game.models import Game, GameResult, GameStatus
+from app.game.modes.anecdotes import public_state, submit_story
 from app.game.modes.registry import get_mode
 from app.rooms.models import Room, RoomStatus
 from app.rooms.manager import MIN_PLAYERS, RoomError
@@ -31,6 +32,7 @@ class GameManager:
             mode=mode.id,
             mode_state=mode.create_initial_state(list(room.players)),
         )
+        game.phase = game.mode_state.get("phase", game.phase)
         room.current_game = game
         room.status = RoomStatus.GAME_RUNNING
         return game
@@ -53,6 +55,21 @@ class GameManager:
         room.selected_mode = None
         room.status = RoomStatus.LOBBY
         return result
+
+    def submit_anecdote(self, room: Room, player_id: str, text: str) -> dict:
+        game = room.current_game
+        if room.status != RoomStatus.GAME_RUNNING or game is None:
+            raise RoomError("NO_ACTIVE_GAME", "Non c'e' una partita attiva.")
+        try:
+            return submit_story(game, player_id, text)
+        except ValueError as error:
+            messages = {
+                "WRITING_NOT_ACTIVE": "La fase di scrittura non e' attiva.",
+                "PLAYER_NOT_IN_GAME": "Il player non appartiene a questa partita.",
+                "STORY_LENGTH_INVALID": "L'aneddoto deve contenere da 1 a 500 caratteri.",
+                "STORY_ALREADY_SUBMITTED": "Hai gia inviato il tuo aneddoto.",
+            }
+            raise RoomError(str(error), messages.get(str(error), "Aneddoto non valido.")) from error
 
 
 game_manager = GameManager()
