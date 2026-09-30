@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.game.models import Game
 from app.rooms.models import Room
 from app.rooms.persistence_models import GameRecord, RoomRecord
+from datetime import datetime, timezone
 
 
 async def persist_room(session: AsyncSession, room: Room) -> None:
@@ -23,7 +24,7 @@ async def persist_room_closed(session: AsyncSession, room: Room) -> None:
     record = await session.scalar(select(RoomRecord).where(RoomRecord.id == room.id))
     if record is not None:
         record.status = room.status.value
-        record.closed_at = room.created_at
+        record.closed_at = datetime.now(timezone.utc)
         await session.commit()
 
 

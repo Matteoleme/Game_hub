@@ -49,6 +49,22 @@ Le room non vengono ancora persistite in SQLite e non esiste ancora il game
 lifecycle: selezione modalità, avvio partita e punteggi appartengono alle
 milestone successive.
 
+## Milestone 4
+
+La milestone game hub aggiunge:
+
+- distinzione live tra `Room` persistente e `Game` singolo;
+- registrazione SQLite di room e game conclusi;
+- registro modalità con Aneddoti disponibile e modalità future disabilitate;
+- selezione modalità riservata all'host;
+- avvio game con almeno 3 player;
+- stato generico `ACTIVE` / `FINISHED` del game;
+- ritorno della room alla lobby senza rimuovere player o azzerare punteggi;
+- punteggio cumulativo della room pronto per i delta delle modalità.
+
+Il game Aneddoti non contiene ancora scrittura, voto o reveal: queste regole
+arrivano nelle milestone 5, 6 e 7.
+
 ## Avvio locale
 
 Prerequisiti: Python 3.12+ e Node.js 22+.

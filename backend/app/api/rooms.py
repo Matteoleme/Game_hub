@@ -6,6 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import current_user
 from app.auth.models import User
 from app.database import get_session
+from app.game.manager import game_manager
+from app.game.persistence import (
+    persist_game_finished,
+    persist_game_started,
+    persist_room,
+    persist_room_closed,
+)
+from app.game.schemas import SelectModeRequest
 from app.rooms.manager import RoomError, room_manager
 from app.rooms.schemas import (
     CreateRoomRequest,
@@ -26,6 +34,12 @@ def room_error(error: RoomError) -> HTTPException:
         "NICKNAME_ALREADY_EXISTS": status.HTTP_409_CONFLICT,
         "ROOM_FULL": status.HTTP_409_CONFLICT,
         "HOST_PERMISSION_REQUIRED": status.HTTP_403_FORBIDDEN,
+        "MINIMUM_PLAYERS_REQUIRED": status.HTTP_409_CONFLICT,
+        "GAME_MODE_REQUIRED": status.HTTP_409_CONFLICT,
+        "GAME_MODE_UNAVAILABLE": status.HTTP_400_BAD_REQUEST,
+        "GAME_ALREADY_ACTIVE": status.HTTP_409_CONFLICT,
+        "NO_ACTIVE_GAME": status.HTTP_409_CONFLICT,
+        "ROOM_NOT_IN_LOBBY": status.HTTP_409_CONFLICT,
     }
     return HTTPException(
         status_code=code_to_status.get(error.code, status.HTTP_400_BAD_REQUEST),
@@ -48,12 +62,14 @@ def set_player_cookie(response: Response, token: str) -> None:
 async def create_room(
     payload: CreateRoomRequest,
     response: Response,
+    session: SessionDependency,
     user: Annotated[User, Depends(current_user)],
 ) -> RoomResponse:
     try:
         room, token = room_manager.create_room(user.id, payload.nickname)
     except RoomError as error:
         raise room_error(error) from error
+    await persist_room(session, room)
     set_player_cookie(response, token)
     return room_response(room)
 
@@ -112,13 +128,73 @@ async def leave_room(
 @router.post("/{code}/close", response_model=RoomResponse)
 async def close_room(
     code: str,
+    session: SessionDependency,
     user: Annotated[User, Depends(current_user)],
 ) -> RoomResponse:
     try:
         room = room_manager.close_room(user.id, code)
     except RoomError as error:
         raise room_error(error) from error
+    await persist_room_closed(session, room)
     from app.socket_server import sio
 
     await sio.emit("room:closed", room_response(room).model_dump(mode="json"), room=room.code)
+    return room_response(room)
+
+
+@router.post("/{code}/mode", response_model=RoomResponse)
+async def select_mode(
+    code: str,
+    payload: SelectModeRequest,
+    session: SessionDependency,
+    user: Annotated[User, Depends(current_user)],
+) -> RoomResponse:
+    try:
+        room, _ = room_manager.get_host_room(code, user.id)
+        game_manager.select_mode(room, payload.mode_id)
+    except RoomError as error:
+        raise room_error(error) from error
+    from app.socket_server import sio
+
+    await sio.emit("room:updated", room_response(room).model_dump(mode="json"), room=room.code)
+    return room_response(room)
+
+
+@router.post("/{code}/start", response_model=RoomResponse)
+async def start_game(
+    code: str,
+    session: SessionDependency,
+    user: Annotated[User, Depends(current_user)],
+) -> RoomResponse:
+    try:
+        room, _ = room_manager.get_host_room(code, user.id)
+        game = game_manager.start_game(room)
+    except (RoomError, ValueError) as error:
+        if isinstance(error, RoomError):
+            raise room_error(error) from error
+        raise room_error(RoomError("GAME_MODE_UNAVAILABLE", "Questa modalita non e' disponibile.")) from error
+    await persist_game_started(session, game)
+    from app.socket_server import sio
+
+    payload = room_response(room).model_dump(mode="json")
+    await sio.emit("game:started", payload, room=room.code)
+    return room_response(room)
+
+
+@router.post("/{code}/finish", response_model=RoomResponse)
+async def finish_game(
+    code: str,
+    session: SessionDependency,
+    user: Annotated[User, Depends(current_user)],
+) -> RoomResponse:
+    try:
+        room, _ = room_manager.get_host_room(code, user.id)
+        result = game_manager.finish_game(room)
+    except RoomError as error:
+        raise room_error(error) from error
+    finished_game = next(game for game in room.completed_games if game.id == result.game_id)
+    await persist_game_finished(session, finished_game)
+    from app.socket_server import sio
+
+    await sio.emit("game:finished", room_response(room).model_dump(mode="json"), room=room.code)
     return room_response(room)

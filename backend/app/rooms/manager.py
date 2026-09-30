@@ -40,6 +40,7 @@ class RoomManager:
             host_user_id=host_user_id,
             host_player_id=host_player.id,
             players={host_player.id: host_player},
+            cumulative_scores={host_player.id: 0},
         )
         self.rooms[code] = room
         token = self._register_player_token(room, host_player)
@@ -59,6 +60,7 @@ class RoomManager:
 
         player = Player(id=str(uuid4()), nickname=normalized_nickname, is_host=False, connected=True)
         room.players[player.id] = player
+        room.cumulative_scores[player.id] = 0
         token = self._register_player_token(room, player)
         return room, player, token
 
@@ -116,6 +118,7 @@ class RoomManager:
         if player.is_host:
             raise RoomError("HOST_CANNOT_LEAVE", "L'host deve chiudere la stanza.")
         room.players.pop(player.id)
+        room.cumulative_scores.pop(player.id, None)
         self.player_tokens.pop(self._hash_token(token or ""), None)
         return room
 

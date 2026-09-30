@@ -27,6 +27,7 @@ async def initialize_database() -> None:
     async with engine.begin() as connection:
         await connection.execute(text("PRAGMA journal_mode=WAL"))
         from app.auth.models import AuthSession, User  # noqa: F401
+        from app.rooms.persistence_models import GameRecord, RoomRecord  # noqa: F401
 
         await connection.run_sync(Base.metadata.create_all)
 

@@ -1,0 +1,93 @@
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
+from uuid import uuid4
+
+from app.database import SessionFactory, initialize_database
+from app.game.manager import game_manager
+from app.main import api
+from app.rooms.manager import RoomError, room_manager
+from app.rooms.persistence_models import GameRecord, RoomRecord
+
+
+@pytest.fixture(autouse=True)
+async def reset_state() -> None:
+    room_manager.rooms.clear()
+    room_manager.player_tokens.clear()
+    room_manager.closed_codes.clear()
+    await initialize_database()
+
+
+def room_with_three_players():
+    room, _ = room_manager.create_room("host", "Host")
+    room_manager.join_room(room.code, "Luca")
+    room_manager.join_room(room.code, "Anna")
+    return room
+
+
+def test_available_modes_can_be_selected_and_future_modes_are_rejected() -> None:
+    room = room_with_three_players()
+
+    game_manager.select_mode(room, "anecdotes")
+    assert room.selected_mode == "anecdotes"
+
+    with pytest.raises(RoomError, match="disponibile"):
+        game_manager.select_mode(room, "most_likely")
+
+
+def test_game_has_own_identity_and_returns_room_to_lobby_with_cumulative_scores() -> None:
+    room = room_with_three_players()
+    room_id = room.id
+    player_ids = set(room.players)
+    game_manager.select_mode(room, "anecdotes")
+
+    game = game_manager.start_game(room)
+    assert game.id != room_id
+    assert game.room_id == room_id
+    assert game.status == "ACTIVE"
+    assert room.current_game is game
+    assert room.status == "GAME_RUNNING"
+
+    result = game_manager.finish_game(room)
+    assert result.game_id == game.id
+    assert room.id == room_id
+    assert room.current_game is None
+    assert room.status == "LOBBY"
+    assert set(room.players) == player_ids
+    assert room.cumulative_scores == {player_id: 0 for player_id in player_ids}
+    assert all(player.score == 0 for player in room.players.values())
+
+
+def test_game_requires_three_players() -> None:
+    room, _ = room_manager.create_room("host", "Host")
+    game_manager.select_mode(room, "anecdotes")
+
+    with pytest.raises(RoomError, match="almeno 3"):
+        game_manager.start_game(room)
+
+
+@pytest.mark.asyncio
+async def test_api_persists_room_and_game_history() -> None:
+    email = f"game-{uuid4()}@example.com"
+    password = "password-123"
+    async with AsyncClient(transport=ASGITransport(app=api), base_url="http://test") as host:
+        await host.post("/api/auth/register", json={"email": email, "password": password})
+        await host.post("/api/auth/login", json={"email": email, "password": password})
+        created = await host.post("/api/rooms", json={"nickname": "Host"})
+        code = created.json()["code"]
+        async with AsyncClient(transport=ASGITransport(app=api), base_url="http://test") as guest_one:
+            await guest_one.post(f"/api/rooms/{code}/join", json={"nickname": "Luca"})
+        async with AsyncClient(transport=ASGITransport(app=api), base_url="http://test") as guest_two:
+            await guest_two.post(f"/api/rooms/{code}/join", json={"nickname": "Anna"})
+        await host.post(f"/api/rooms/{code}/mode", json={"mode_id": "anecdotes"})
+        started = await host.post(f"/api/rooms/{code}/start")
+        game_id = started.json()["current_game"]["id"]
+        await host.post(f"/api/rooms/{code}/finish")
+
+    async with SessionFactory() as session:
+        room_record = await session.scalar(select(RoomRecord).where(RoomRecord.code == code))
+        game_record = await session.scalar(select(GameRecord).where(GameRecord.id == game_id))
+
+    assert room_record is not None
+    assert game_record is not None
+    assert game_record.finished_at is not None

@@ -70,4 +70,18 @@ h1 { font-family: "Space Grotesk", sans-serif; font-size: clamp(3rem, 15vw, 7.5r
 .player-row small { color: #f2c66d; font-size: 0.68rem; margin-left: auto; }
 
 .status-dot.offline { background: #8b9a92; box-shadow: none; }
+
+.mode-selector, .game-status { display: grid; gap: 8px; margin: 22px 0; }
+
+.mode-option { align-items: center; background: rgba(246, 242, 233, 0.06); border: 1px solid rgba(246, 242, 233, 0.16); color: #f6f2e9; display: flex; justify-content: space-between; text-align: left; }
+
+.mode-option.selected { border-color: #f2c66d; }
+
+.mode-option:disabled { color: #8b9a92; cursor: not-allowed; }
+
+.mode-option small { font-size: 0.65rem; letter-spacing: 0.08em; }
+
+.game-status { background: rgba(137, 215, 164, 0.1); border: 1px solid rgba(137, 215, 164, 0.3); padding: 18px; }
+
+.waiting-copy { color: #c6d6cb; font-size: 0.9rem; }
 @media (min-width: 700px) { .app-shell { padding: 64px; } .welcome-panel { width: 100%; } }

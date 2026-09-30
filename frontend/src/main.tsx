@@ -7,7 +7,9 @@ import "./styles.css";
 type User = { id: string; email: string; created_at: string };
 type AuthResponse = { user: User };
 type Player = { id: string; nickname: string; is_host: boolean; connected: boolean; score: number };
-type Room = { id: string; code: string; status: string; host_player_id: string; created_at: string; players: Player[] };
+type Game = { id: string; room_id: string; mode: string; status: string; phase: string; started_at: string; finished_at: string | null };
+type Room = { id: string; code: string; status: string; host_player_id: string; created_at: string; players: Player[]; selected_mode: string | null; current_game: Game | null; cumulative_scores: Record<string, number> };
+type GameMode = { id: string; name: string; available: boolean };
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "";
 
@@ -103,9 +105,9 @@ function AuthPage() {
             <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required /></label>
             {error && <p className="form-error" role="alert">{error}</p>}
             <button className="submit-button" type="submit" disabled={loading}>{loading ? "Attendi..." : mode === "login" ? "Accedi" : "Crea account"}</button>
-            <GuestJoin onJoined={setRoom} />
           </form>
         )}
+        {!user && <GuestJoin onJoined={setRoom} />}
         <div className="status-row" role="status">
           <span className="status-dot" aria-hidden="true" />
           Foundation online
@@ -169,7 +171,12 @@ function GuestJoin({ onJoined }: { onJoined: (room: Room) => void }) {
 
 function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: boolean; onExit: () => void }) {
   const [room, setRoom] = useState(initialRoom);
+  const [modes, setModes] = useState<GameMode[]>([]);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    request<GameMode[]>("/api/game-modes").then(setModes).catch(() => setError("Impossibile caricare le modalita."));
+  }, []);
 
   useEffect(() => {
     const socket = io(apiBaseUrl || window.location.origin, { withCredentials: true });
@@ -179,7 +186,7 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
     return () => {
       socket.disconnect();
     };
-  }, [onExit]);
+  }, []);
 
   async function closeRoom() {
     await request(`/api/rooms/${room.code}/close`, { method: "POST" });
@@ -189,6 +196,29 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
   async function leaveRoom() {
     await request(`/api/rooms/${room.code}/leave`, { method: "POST" });
     onExit();
+  }
+
+  async function selectMode(modeId: string) {
+    try {
+      const updatedRoom = await request<Room>(`/api/rooms/${room.code}/mode`, { method: "POST", body: JSON.stringify({ mode_id: modeId }) });
+      setRoom(updatedRoom);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Impossibile selezionare la modalita.");
+    }
+  }
+
+  async function startGame() {
+    try {
+      const updatedRoom = await request<Room>(`/api/rooms/${room.code}/start`, { method: "POST" });
+      setRoom(updatedRoom);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Impossibile iniziare la partita.");
+    }
+  }
+
+  async function finishGame() {
+    const updatedRoom = await request<Room>(`/api/rooms/${room.code}/finish`, { method: "POST" });
+    setRoom(updatedRoom);
   }
 
   return (
@@ -203,6 +233,26 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
             <div className="player-row" key={player.id}><span className={player.connected ? "status-dot" : "status-dot offline"} />{player.nickname}{player.is_host && <small>HOST</small>}</div>
           ))}
         </div>
+        <div className="mode-selector">
+          <p className="panel-label">MODALITA</p>
+          {modes.map((mode) => (
+            <button key={mode.id} type="button" disabled={!isHost || !mode.available || room.current_game !== null} className={room.selected_mode === mode.id ? "mode-option selected" : "mode-option"} onClick={() => selectMode(mode.id)}>
+              <span>{mode.name}</span><small>{mode.available ? (room.selected_mode === mode.id ? "SELEZIONATA" : "DISPONIBILE") : "PRESTO"}</small>
+            </button>
+          ))}
+        </div>
+        {room.current_game ? (
+          <div className="game-status">
+            <p className="panel-label">PARTITA ATTIVA</p>
+            <strong>{room.current_game.mode}</strong>
+            <span>Stato: {room.current_game.status}</span>
+            {isHost && <button className="submit-button" type="button" onClick={finishGame}>Torna alla lobby</button>}
+          </div>
+        ) : isHost ? (
+          <button className="submit-button" type="button" disabled={room.players.length < 3 || room.selected_mode === null} onClick={startGame}>Inizia partita</button>
+        ) : (
+          <p className="waiting-copy">Attendi che l'host scelga una modalita e inizi la partita.</p>
+        )}
         {error && <p className="form-error">{error}</p>}
         {isHost ? <button className="submit-button" type="button" onClick={closeRoom}>Chiudi stanza</button> : <button className="submit-button" type="button" onClick={leaveRoom}>Esci dalla stanza</button>}
       </section>

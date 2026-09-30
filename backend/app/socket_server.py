@@ -3,6 +3,9 @@ from http.cookies import SimpleCookie
 from typing import Any
 
 from app.config import get_settings
+from app.database import SessionFactory
+from app.game.manager import game_manager
+from app.game.persistence import persist_game_finished, persist_game_started
 from app.rooms.manager import RoomError, room_manager
 from app.rooms.schemas import room_response
 
@@ -110,3 +113,60 @@ async def room_close(sid: str) -> None:
         await emit_room_error(sid, error)
         return
     await sio.emit("room:closed", room_payload(closed_room), room=room.code)
+
+
+@sio.on("room:select_mode")
+async def room_select_mode(sid: str, data: dict[str, Any] | None = None) -> None:
+    token = socket_tokens.get(sid)
+    result = room_manager.get_room_for_player_token(token)
+    if result is None or not result[1].is_host:
+        await emit_room_error(sid, RoomError("HOST_PERMISSION_REQUIRED", "Solo l'host puo scegliere la modalita."))
+        return
+    mode_id = (data or {}).get("modeId")
+    if not isinstance(mode_id, str):
+        await emit_room_error(sid, RoomError("GAME_MODE_UNAVAILABLE", "Modalita non valida."))
+        return
+    room = result[0]
+    try:
+        game_manager.select_mode(room, mode_id)
+    except RoomError as error:
+        await emit_room_error(sid, error)
+        return
+    await sio.emit("room:updated", room_payload(room), room=room.code)
+
+
+@sio.on("game:start")
+async def game_start(sid: str) -> None:
+    token = socket_tokens.get(sid)
+    result = room_manager.get_room_for_player_token(token)
+    if result is None or not result[1].is_host:
+        await emit_room_error(sid, RoomError("HOST_PERMISSION_REQUIRED", "Solo l'host puo iniziare la partita."))
+        return
+    room = result[0]
+    try:
+        game = game_manager.start_game(room)
+    except RoomError as error:
+        await emit_room_error(sid, error)
+        return
+    async with SessionFactory() as session:
+        await persist_game_started(session, game)
+    await sio.emit("game:started", room_payload(room), room=room.code)
+
+
+@sio.on("game:finish")
+async def game_finish(sid: str) -> None:
+    token = socket_tokens.get(sid)
+    result = room_manager.get_room_for_player_token(token)
+    if result is None or not result[1].is_host:
+        await emit_room_error(sid, RoomError("HOST_PERMISSION_REQUIRED", "Solo l'host puo terminare la partita."))
+        return
+    room = result[0]
+    try:
+        game_result = game_manager.finish_game(room)
+    except RoomError as error:
+        await emit_room_error(sid, error)
+        return
+    finished_game = next(game for game in room.completed_games if game.id == game_result.game_id)
+    async with SessionFactory() as session:
+        await persist_game_finished(session, finished_game)
+    await sio.emit("game:finished", room_payload(room), room=room.code)

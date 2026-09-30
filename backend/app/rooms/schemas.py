@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.rooms.models import Room
+from app.game.schemas import GameResponse, game_response
 
 
 class CreateRoomRequest(BaseModel):
@@ -28,6 +29,9 @@ class RoomResponse(BaseModel):
     host_player_id: str
     created_at: datetime
     players: list[PlayerResponse]
+    selected_mode: str | None
+    current_game: GameResponse | None
+    cumulative_scores: dict[str, int]
 
 
 def room_response(room: Room) -> RoomResponse:
@@ -47,4 +51,7 @@ def room_response(room: Room) -> RoomResponse:
             )
             for player in room.players.values()
         ],
+        selected_mode=room.selected_mode,
+        current_game=game_response(room.current_game),
+        cumulative_scores=room.cumulative_scores.copy(),
     )
