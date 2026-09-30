@@ -14,7 +14,7 @@ from app.game.persistence import (
     persist_room,
     persist_room_closed,
 )
-from app.game.schemas import SelectModeRequest
+from app.game.schemas import GameHistoryResponse, SelectModeRequest, game_history_response
 from pydantic import Field
 from pydantic import BaseModel
 from app.rooms.manager import RoomError, room_manager
@@ -123,6 +123,20 @@ async def get_room(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={"code": "ROOM_ACCESS_REQUIRED", "message": "Accedi alla stanza con il relativo token."},
     )
+
+
+@router.get("/{code}/history", response_model=list[GameHistoryResponse])
+async def room_history(
+    code: str,
+    player_token: str | None = Cookie(default=None, alias=PLAYER_COOKIE_NAME),
+) -> list[GameHistoryResponse]:
+    player_result = room_manager.get_room_for_player_token(player_token)
+    if player_result is None or player_result[0].code != code.strip().upper():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "ROOM_ACCESS_REQUIRED", "message": "Accesso alla stanza richiesto."},
+        )
+    return [game_history_response(game) for game in player_result[0].completed_games]
 
 
 @router.post("/{code}/leave", status_code=status.HTTP_204_NO_CONTENT)

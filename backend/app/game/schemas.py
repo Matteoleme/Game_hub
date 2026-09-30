@@ -29,6 +29,16 @@ class GameModeResponse(BaseModel):
     available: bool
 
 
+class GameHistoryResponse(BaseModel):
+    id: str
+    room_id: str
+    mode: str
+    status: str
+    started_at: datetime
+    finished_at: datetime | None
+    points_by_player: dict[str, int]
+
+
 def game_response(game: Game | None, players: dict | None = None) -> GameResponse | None:
     if game is None:
         return None
@@ -46,3 +56,15 @@ def game_response(game: Game | None, players: dict | None = None) -> GameRespons
 
 def mode_response(mode: ModeDescriptor) -> GameModeResponse:
     return GameModeResponse(id=mode.id, name=mode.name, available=mode.available)
+
+
+def game_history_response(game: Game) -> GameHistoryResponse:
+    return GameHistoryResponse(
+        id=game.id,
+        room_id=game.room_id,
+        mode=game.mode,
+        status=game.status.value,
+        started_at=game.started_at,
+        finished_at=game.finished_at,
+        points_by_player=game.mode_state.get("pointsByPlayer", {}),
+    )

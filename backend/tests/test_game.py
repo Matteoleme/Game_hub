@@ -67,6 +67,33 @@ def test_game_requires_three_players() -> None:
         game_manager.start_game(room)
 
 
+def test_multiple_games_keep_room_players_and_cumulative_scores() -> None:
+    room = room_with_three_players()
+    room_id = room.id
+    player_ids = list(room.players)
+
+    game_manager.select_mode(room, "anecdotes")
+    first_game = game_manager.start_game(room)
+    first_game.mode_state["pointsByPlayer"] = {player_ids[0]: 2, player_ids[1]: 1, player_ids[2]: 0}
+    first_game.mode_state["scoreApplied"] = True
+    for player_id, points in first_game.mode_state["pointsByPlayer"].items():
+        room.cumulative_scores[player_id] = points
+        room.players[player_id].score = points
+    game_manager.finish_game(room)
+
+    game_manager.select_mode(room, "anecdotes")
+    second_game = game_manager.start_game(room)
+    assert second_game.id != first_game.id
+    assert room.id == room_id
+    assert set(room.players) == set(player_ids)
+    assert [game.id for game in room.completed_games] == [first_game.id]
+    assert room.cumulative_scores == {player_ids[0]: 2, player_ids[1]: 1, player_ids[2]: 0}
+    game_manager.finish_game(room)
+    assert len(room.completed_games) == 2
+    assert room.status == "LOBBY"
+    assert [player.score for player in room.players.values()] == [2, 1, 0]
+
+
 def test_anecdotes_writing_is_validated_and_advances_after_all_submissions() -> None:
     room = room_with_three_players()
     game_manager.select_mode(room, "anecdotes")
@@ -164,6 +191,7 @@ async def test_api_persists_room_and_game_history() -> None:
         started = await host.post(f"/api/rooms/{code}/start")
         game_id = started.json()["current_game"]["id"]
         await host.post(f"/api/rooms/{code}/finish")
+        history_response = await host.get(f"/api/rooms/{code}/history")
 
     async with SessionFactory() as session:
         room_record = await session.scalar(select(RoomRecord).where(RoomRecord.code == code))
@@ -174,3 +202,6 @@ async def test_api_persists_room_and_game_history() -> None:
     assert game_record is not None
     assert game_record.finished_at is not None
     assert result_record is not None
+    assert history_response.status_code == 200
+    assert len(history_response.json()) == 1
+    assert history_response.json()[0]["id"] == game_id

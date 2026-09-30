@@ -118,4 +118,10 @@ h1 { font-family: "Space Grotesk", sans-serif; font-size: clamp(3rem, 15vw, 7.5r
 .reveal-vote.correct { color: #89d7a4; }
 
 .score-list { background: rgba(8, 25, 21, 0.48); border: 1px solid rgba(246, 242, 233, 0.18); padding: 16px; }
+
+.history-panel { background: rgba(8, 25, 21, 0.36); border: 1px solid rgba(246, 242, 233, 0.16); display: grid; gap: 8px; margin: 22px 0; padding: 16px; }
+
+.history-row { border-top: 1px solid rgba(246, 242, 233, 0.12); display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; padding-top: 10px; }
+
+.history-row span:last-child { color: #c6d6cb; font-size: 0.8rem; }
 @media (min-width: 700px) { .app-shell { padding: 64px; } .welcome-panel { width: 100%; } }

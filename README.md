@@ -96,6 +96,21 @@ Implementata la votazione Aneddoti:
 Il calcolo dei punti e la visualizzazione dell'autore/reveal sono riservati alla
 Milestone 7.
 
+## Milestone 8
+
+Implementate le partite multiple nella stessa room:
+
+- ogni nuova partita crea un `gameId` distinto;
+- room code e player restano invariati tra le partite;
+- punteggi cumulativi mantenuti dopo il ritorno alla lobby;
+- storico delle partite concluse incluso nella room;
+- endpoint protetto `GET /api/rooms/{code}/history`;
+- UI lobby con delta punti per ogni partita conclusa;
+- reset dello stato frontend di scrittura e voto quando cambia partita.
+
+La room viene ancora chiusa esclusivamente dall'host tramite l'azione esplicita
+di chiusura.
+
 ## Milestone 7
 
 Implementati reveal e scoring Aneddoti:

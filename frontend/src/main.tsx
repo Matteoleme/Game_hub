@@ -8,7 +8,8 @@ type User = { id: string; email: string; created_at: string };
 type AuthResponse = { user: User };
 type Player = { id: string; nickname: string; is_host: boolean; connected: boolean; score: number };
 type Game = { id: string; room_id: string; mode: string; status: string; phase: string; started_at: string; finished_at: string | null; mode_state: Record<string, unknown> };
-type Room = { id: string; code: string; status: string; host_player_id: string; created_at: string; players: Player[]; selected_mode: string | null; current_game: Game | null; cumulative_scores: Record<string, number> };
+type Room = { id: string; code: string; status: string; host_player_id: string; created_at: string; players: Player[]; selected_mode: string | null; current_game: Game | null; cumulative_scores: Record<string, number>; completed_games: CompletedGame[] };
+type CompletedGame = { id: string; room_id: string; mode: string; status: string; started_at: string; finished_at: string | null; points_by_player: Record<string, number> };
 type GameMode = { id: string; name: string; available: boolean };
 type RevealVote = { voterPlayerId: string; voterNickname: string; targetPlayerId: string; targetNickname: string; correct: boolean; pointsEarned: number };
 type RevealStory = { id: string; text: string; authorPlayerId: string; authorNickname: string; votes: RevealVote[] };
@@ -179,12 +180,19 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
   const [votedStoryIds, setVotedStoryIds] = useState<string[]>([]);
 
   useEffect(() => {
+    setStorySubmitted(false);
+    setVotedStoryIds([]);
+  }, [room.current_game?.id]);
+
+  useEffect(() => {
     request<GameMode[]>("/api/game-modes").then(setModes).catch(() => setError("Impossibile caricare le modalita."));
   }, []);
 
   useEffect(() => {
     const socket = io(apiBaseUrl || window.location.origin, { withCredentials: true });
     socket.on("room:updated", (updatedRoom: Room) => setRoom(updatedRoom));
+    socket.on("game:started", (updatedRoom: Room) => setRoom(updatedRoom));
+    socket.on("game:finished", (updatedRoom: Room) => setRoom(updatedRoom));
     socket.on("room:closed", () => onExit());
     socket.on("error", (socketError: { message?: string }) => setError(socketError.message ?? "Errore di connessione."));
     return () => {
@@ -237,6 +245,7 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
             <div className="player-row" key={player.id}><span className={player.connected ? "status-dot" : "status-dot offline"} />{player.nickname}{player.is_host && <small>HOST</small>}</div>
           ))}
         </div>
+        {room.completed_games.length > 0 && <GameHistory games={room.completed_games} players={room.players} />}
         <div className="mode-selector">
           <p className="panel-label">MODALITA</p>
           {modes.map((mode) => (
@@ -285,6 +294,20 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
         {isHost ? <button className="submit-button" type="button" onClick={closeRoom}>Chiudi stanza</button> : <button className="submit-button" type="button" onClick={leaveRoom}>Esci dalla stanza</button>}
       </section>
     </main>
+  );
+}
+
+function GameHistory({ games, players }: { games: CompletedGame[]; players: Player[] }) {
+  return (
+    <div className="history-panel">
+      <p className="panel-label">PARTITE CONCLUSE</p>
+      {games.map((game, index) => (
+        <div className="history-row" key={game.id}>
+          <span>#{index + 1} {game.mode}</span>
+          <span>{Object.entries(game.points_by_player).map(([playerId, points]) => `${players.find((player) => player.id === playerId)?.nickname ?? "Player"} +${points}`).join(" · ")}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
