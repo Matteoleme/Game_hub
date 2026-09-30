@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from app.database import SessionFactory, initialize_database
 from app.game.manager import game_manager
+from app.game.modes.anecdotes import public_state
 from app.main import api
 from app.rooms.manager import RoomError, room_manager
 from app.rooms.persistence_models import GameRecord, RoomRecord
@@ -92,6 +93,50 @@ def test_anecdotes_writing_is_validated_and_advances_after_all_submissions() -> 
     assert set(final_progress["submittedPlayerIds"]) == set(player_ids)
     assert room.current_game is not None
     assert room.current_game.mode_state["submissions"][player_ids[0]] == "Una storia breve."
+
+
+def test_anecdotes_voting_is_anonymous_validated_and_advances_stories() -> None:
+    room = room_with_three_players()
+    game_manager.select_mode(room, "anecdotes")
+    game_manager.start_game(room)
+    player_ids = list(room.players)
+    for index, player_id in enumerate(player_ids):
+        game_manager.submit_anecdote(room, player_id, f"Story {index}")
+
+    assert room.current_game is not None
+    public = room.current_game.mode_state
+    first_story = public["stories"][public["currentStoryIndex"]]
+    author_id = first_story["authorPlayerId"]
+    voter_ids = [player_id for player_id in player_ids if player_id != author_id]
+    target_id = author_id
+
+    with pytest.raises(RoomError, match="votare il tuo"):
+        game_manager.submit_vote(room, author_id, target_id)
+    with pytest.raises(RoomError, match="votare te stesso"):
+        game_manager.submit_vote(room, voter_ids[0], voter_ids[0])
+    with pytest.raises(RoomError, match="non appartiene"):
+        game_manager.submit_vote(room, voter_ids[0], "unknown")
+
+    progress = game_manager.submit_vote(room, voter_ids[0], target_id)
+    assert progress["phase"] == "VOTING"
+    assert progress["votesReceived"] == 1
+    with pytest.raises(RoomError, match="gia votato"):
+        game_manager.submit_vote(room, voter_ids[0], target_id)
+
+    game_manager.submit_vote(room, voter_ids[1], target_id)
+    assert room.current_game.mode_state["currentStoryIndex"] == 1
+
+    for story_index in (1, 2):
+        story = room.current_game.mode_state["stories"][story_index]
+        author = story["authorPlayerId"]
+        eligible = [player_id for player_id in player_ids if player_id != author]
+        game_manager.submit_vote(room, eligible[0], player_ids[0] if player_ids[0] != eligible[0] else player_ids[1])
+        game_manager.submit_vote(room, eligible[1], player_ids[0] if player_ids[0] != eligible[1] else player_ids[1])
+
+    assert room.current_game.phase == "REVEAL"
+    reveal_public = public_state(room.current_game)
+    assert "authorPlayerId" not in reveal_public
+    assert "authorPlayerId" not in reveal_public["currentStory"]
 
 
 @pytest.mark.asyncio

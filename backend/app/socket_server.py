@@ -190,3 +190,23 @@ async def story_submit(sid: str, data: dict[str, Any] | None = None) -> None:
         await emit_room_error(sid, error)
         return
     await sio.emit("writing:updated", room_payload(room), room=room.code)
+
+
+@sio.on("vote:submit")
+async def vote_submit(sid: str, data: dict[str, Any] | None = None) -> None:
+    token = socket_tokens.get(sid)
+    result = room_manager.get_room_for_player_token(token)
+    if result is None:
+        await emit_room_error(sid)
+        return
+    target_player_id = (data or {}).get("targetPlayerId")
+    if not isinstance(target_player_id, str):
+        await emit_room_error(sid, RoomError("TARGET_PLAYER_NOT_IN_GAME", "Player votato non valido."))
+        return
+    room, player = result
+    try:
+        game_manager.submit_vote(room, player.id, target_player_id)
+    except RoomError as error:
+        await emit_room_error(sid, error)
+        return
+    await sio.emit("voting:updated", room_payload(room), room=room.code)

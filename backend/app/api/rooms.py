@@ -33,6 +33,10 @@ class StorySubmissionRequest(BaseModel):
     text: str = Field(min_length=1, max_length=500)
 
 
+class VoteSubmissionRequest(BaseModel):
+    target_player_id: str
+
+
 def room_error(error: RoomError) -> HTTPException:
     code_to_status = {
         "ROOM_NOT_FOUND": status.HTTP_404_NOT_FOUND,
@@ -46,6 +50,11 @@ def room_error(error: RoomError) -> HTTPException:
         "GAME_ALREADY_ACTIVE": status.HTTP_409_CONFLICT,
         "NO_ACTIVE_GAME": status.HTTP_409_CONFLICT,
         "ROOM_NOT_IN_LOBBY": status.HTTP_409_CONFLICT,
+        "AUTHOR_CANNOT_VOTE": status.HTTP_409_CONFLICT,
+        "SELF_VOTE_NOT_ALLOWED": status.HTTP_409_CONFLICT,
+        "VOTE_ALREADY_SUBMITTED": status.HTTP_409_CONFLICT,
+        "TARGET_PLAYER_NOT_IN_GAME": status.HTTP_400_BAD_REQUEST,
+        "VOTING_NOT_ACTIVE": status.HTTP_409_CONFLICT,
     }
     return HTTPException(
         status_code=code_to_status.get(error.code, status.HTTP_400_BAD_REQUEST),
@@ -226,4 +235,27 @@ async def submit_story(
     from app.socket_server import sio
 
     await sio.emit("writing:updated", room_response(room).model_dump(mode="json"), room=room.code)
+    return room_response(room)
+
+
+@router.post("/{code}/vote", response_model=RoomResponse)
+async def submit_vote(
+    code: str,
+    payload: VoteSubmissionRequest,
+    player_token: str | None = Cookie(default=None, alias=PLAYER_COOKIE_NAME),
+) -> RoomResponse:
+    player_result = room_manager.get_room_for_player_token(player_token)
+    if player_result is None or player_result[0].code != code.strip().upper():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "ROOM_ACCESS_REQUIRED", "message": "Accesso alla stanza richiesto."},
+        )
+    room, player = player_result
+    try:
+        game_manager.submit_vote(room, player.id, payload.target_player_id)
+    except RoomError as error:
+        raise room_error(error) from error
+    from app.socket_server import sio
+
+    await sio.emit("voting:updated", room_response(room).model_dump(mode="json"), room=room.code)
     return room_response(room)

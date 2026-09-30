@@ -80,6 +80,22 @@ Implementata la fase di scrittura Aneddoti:
 La fase `VOTING` è soltanto il punto di arrivo della milestone: raccolta voti
 e reveal inizieranno rispettivamente nelle milestone 6 e 7.
 
+## Milestone 6
+
+Implementata la votazione Aneddoti:
+
+- una storia alla volta, mescolata server-side;
+- testo dell'aneddoto visibile senza autore reale;
+- lista candidati e progresso dei voti senza voti individuali;
+- autore impossibilitato a votare la propria storia;
+- self-vote, target inesistenti e voti duplicati rifiutati dal server;
+- avanzamento automatico alla storia successiva;
+- transizione a `REVEAL` dopo l'ultima storia, senza ancora mostrare l'autore;
+- endpoint REST `POST /api/rooms/{code}/vote` e Socket.IO `vote:submit`.
+
+Il calcolo dei punti e la visualizzazione dell'autore/reveal sono riservati alla
+Milestone 7.
+
 ## Avvio locale
 
 Prerequisiti: Python 3.12+ e Node.js 22+.

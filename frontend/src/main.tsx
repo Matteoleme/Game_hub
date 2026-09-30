@@ -174,6 +174,7 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
   const [modes, setModes] = useState<GameMode[]>([]);
   const [error, setError] = useState("");
   const [storySubmitted, setStorySubmitted] = useState(false);
+  const [votedStoryIds, setVotedStoryIds] = useState<string[]>([]);
 
   useEffect(() => {
     request<GameMode[]>("/api/game-modes").then(setModes).catch(() => setError("Impossibile caricare le modalita."));
@@ -258,9 +259,16 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
               />
             )}
             {room.current_game.mode === "anecdotes" && room.current_game.phase === "VOTING" && (
-              <p className="waiting-copy">Tutti gli aneddoti sono stati inviati. La votazione arrivera nella prossima milestone.</p>
+              <AnecdoteVoting
+                room={room}
+                votedStoryIds={votedStoryIds}
+                onVoted={(updatedRoom, storyId) => {
+                  setVotedStoryIds((current) => [...current, storyId]);
+                  setRoom(updatedRoom);
+                }}
+                onError={setError}
+              />
             )}
-            {isHost && <button className="submit-button" type="button" onClick={finishGame}>Torna alla lobby</button>}
           </div>
         ) : isHost ? (
           <button className="submit-button" type="button" disabled={room.players.length < 3 || room.selected_mode === null} onClick={startGame}>Inizia partita</button>
@@ -271,6 +279,32 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
         {isHost ? <button className="submit-button" type="button" onClick={closeRoom}>Chiudi stanza</button> : <button className="submit-button" type="button" onClick={leaveRoom}>Esci dalla stanza</button>}
       </section>
     </main>
+  );
+}
+
+function AnecdoteVoting({ room, votedStoryIds, onVoted, onError }: { room: Room; votedStoryIds: string[]; onVoted: (room: Room, storyId: string) => void; onError: (message: string) => void }) {
+  const state = room.current_game?.mode_state as { currentStory?: { id: string; text: string }; currentStoryIndex?: number; totalStories?: number; votesReceived?: number; eligibleVotes?: number };
+  const story = state.currentStory;
+  if (!story) return null;
+  const currentStory = story;
+  const hasVoted = votedStoryIds.includes(story.id);
+
+  async function vote(targetPlayerId: string) {
+    onError("");
+    try {
+      const updatedRoom = await request<Room>(`/api/rooms/${room.code}/vote`, { method: "POST", body: JSON.stringify({ target_player_id: targetPlayerId }) });
+      onVoted(updatedRoom, currentStory.id);
+    } catch (requestError) {
+      onError(requestError instanceof Error ? requestError.message : "Voto non valido.");
+    }
+  }
+
+  return (
+    <div className="voting-panel">
+      <div className="story-card"><p className="panel-label">ANEDDOTO {(state.currentStoryIndex ?? 0) + 1} / {state.totalStories}</p><p>{currentStory.text}</p></div>
+      <div className="writing-meta"><span>Voti ricevuti</span><span>{state.votesReceived ?? 0} / {state.eligibleVotes ?? 0}</span></div>
+      {hasVoted ? <p className="waiting-copy">Voto inviato. Attendi gli altri giocatori.</p> : <div className="candidate-list">{room.players.map((player) => <button className="candidate-button" key={player.id} type="button" onClick={() => vote(player.id)}>{player.nickname}</button>)}</div>}
+    </div>
   );
 }
 

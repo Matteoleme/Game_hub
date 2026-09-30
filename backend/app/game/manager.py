@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from app.game.models import Game, GameResult, GameStatus
-from app.game.modes.anecdotes import public_state, submit_story
+from app.game.modes.anecdotes import submit_story, submit_vote
 from app.game.modes.registry import get_mode
 from app.rooms.models import Room, RoomStatus
 from app.rooms.manager import MIN_PLAYERS, RoomError
@@ -70,6 +70,23 @@ class GameManager:
                 "STORY_ALREADY_SUBMITTED": "Hai gia inviato il tuo aneddoto.",
             }
             raise RoomError(str(error), messages.get(str(error), "Aneddoto non valido.")) from error
+
+    def submit_vote(self, room: Room, player_id: str, target_player_id: str) -> dict:
+        game = room.current_game
+        if room.status != RoomStatus.GAME_RUNNING or game is None:
+            raise RoomError("NO_ACTIVE_GAME", "Non c'e' una partita attiva.")
+        try:
+            return submit_vote(game, player_id, target_player_id)
+        except ValueError as error:
+            messages = {
+                "VOTING_NOT_ACTIVE": "La fase di votazione non e' attiva.",
+                "PLAYER_NOT_IN_GAME": "Il player non appartiene a questa partita.",
+                "TARGET_PLAYER_NOT_IN_GAME": "Il player votato non appartiene alla partita.",
+                "SELF_VOTE_NOT_ALLOWED": "Non puoi votare te stesso.",
+                "AUTHOR_CANNOT_VOTE": "Non puoi votare il tuo stesso aneddoto.",
+                "VOTE_ALREADY_SUBMITTED": "Hai gia votato questo aneddoto.",
+            }
+            raise RoomError(str(error), messages.get(str(error), "Voto non valido.")) from error
 
 
 game_manager = GameManager()
