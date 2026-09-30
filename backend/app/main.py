@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.api.rooms import router as rooms_router
 from app.config import get_settings
 from app.database import initialize_database
 from app.socket_server import sio
@@ -32,6 +33,7 @@ api.add_middleware(
 )
 api.include_router(health_router, prefix="/api")
 api.include_router(auth_router, prefix="/api")
+api.include_router(rooms_router, prefix="/api")
 
 static_directory = Path(__file__).parent.parent / "static"
 if static_directory.is_dir():

@@ -31,6 +31,24 @@ La milestone di autenticazione host include:
 Le sessioni usano token casuali opachi: il cookie non contiene dati utente e nel
 database viene memorizzato soltanto l'hash del token.
 
+## Milestone 3
+
+La milestone room include:
+
+- creazione room da parte di un host autenticato;
+- codice stanza casuale di 4 lettere maiuscole;
+- ingresso guest con nickname e player token `HttpOnly`;
+- nickname unici case-insensitive e limite massimo di 20 giocatori;
+- stato live delle room mantenuto in RAM;
+- lobby sincronizzata via Socket.IO;
+- disconnessione temporanea senza rimozione del player;
+- uscita guest e chiusura esplicita riservata all'host;
+- frontend per creare, entrare e visualizzare la lobby.
+
+Le room non vengono ancora persistite in SQLite e non esiste ancora il game
+lifecycle: selezione modalità, avvio partita e punteggi appartengono alle
+milestone successive.
+
 ## Avvio locale
 
 Prerequisiti: Python 3.12+ e Node.js 22+.

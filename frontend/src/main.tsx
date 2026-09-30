@@ -1,10 +1,13 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { FormEvent, useEffect, useState } from "react";
+import { io } from "socket.io-client";
 import "./styles.css";
 
 type User = { id: string; email: string; created_at: string };
 type AuthResponse = { user: User };
+type Player = { id: string; nickname: string; is_host: boolean; connected: boolean; score: number };
+type Room = { id: string; code: string; status: string; host_player_id: string; created_at: string; players: Player[] };
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "";
 
@@ -36,6 +39,7 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [room, setRoom] = useState<Room | null>(null);
 
   useEffect(() => {
     request<AuthResponse>("/api/auth/me")
@@ -69,6 +73,10 @@ function AuthPage() {
     setUser(null);
   }
 
+  if (room) {
+    return <RoomLobby room={room} isHost={Boolean(user)} onExit={() => setRoom(null)} />;
+  }
+
   return (
     <main className="app-shell">
       <section className="welcome-panel" aria-labelledby="page-title">
@@ -82,6 +90,7 @@ function AuthPage() {
           <div className="auth-panel">
             <p className="panel-label">HOST AUTENTICATO</p>
             <strong>{user.email}</strong>
+            <RoomCreator onCreated={setRoom} />
             <button type="button" onClick={logout}>Esci</button>
           </div>
         ) : (
@@ -94,12 +103,108 @@ function AuthPage() {
             <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required /></label>
             {error && <p className="form-error" role="alert">{error}</p>}
             <button className="submit-button" type="submit" disabled={loading}>{loading ? "Attendi..." : mode === "login" ? "Accedi" : "Crea account"}</button>
+            <GuestJoin onJoined={setRoom} />
           </form>
         )}
         <div className="status-row" role="status">
           <span className="status-dot" aria-hidden="true" />
           Foundation online
         </div>
+      </section>
+    </main>
+  );
+}
+
+function RoomCreator({ onCreated }: { onCreated: (room: Room) => void }) {
+  const [nickname, setNickname] = useState("");
+  const [error, setError] = useState("");
+
+  async function create(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    try {
+      const result = await request<Room>("/api/rooms", { method: "POST", body: JSON.stringify({ nickname }) });
+      onCreated(result);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Impossibile creare la stanza.");
+    }
+  }
+
+  return (
+    <form className="room-create" onSubmit={create}>
+      <p className="panel-label">NUOVA STANZA</p>
+      <label>Il tuo nickname<input value={nickname} onChange={(event) => setNickname(event.target.value)} maxLength={24} required /></label>
+      {error && <p className="form-error">{error}</p>}
+      <button className="submit-button" type="submit">Crea stanza</button>
+    </form>
+  );
+}
+
+function GuestJoin({ onJoined }: { onJoined: (room: Room) => void }) {
+  const [code, setCode] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [error, setError] = useState("");
+
+  async function join(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    try {
+      const result = await request<Room>(`/api/rooms/${code}/join`, { method: "POST", body: JSON.stringify({ nickname }) });
+      onJoined(result);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Impossibile entrare nella stanza.");
+    }
+  }
+
+  return (
+    <form className="room-create guest-join" onSubmit={join}>
+      <p className="panel-label">ENTRA COME GUEST</p>
+      <label>Codice stanza<input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={4} required /></label>
+      <label>Nickname<input value={nickname} onChange={(event) => setNickname(event.target.value)} maxLength={24} required /></label>
+      {error && <p className="form-error">{error}</p>}
+      <button className="submit-button" type="submit">Entra nella stanza</button>
+    </form>
+  );
+}
+
+function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: boolean; onExit: () => void }) {
+  const [room, setRoom] = useState(initialRoom);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const socket = io(apiBaseUrl || window.location.origin, { withCredentials: true });
+    socket.on("room:updated", (updatedRoom: Room) => setRoom(updatedRoom));
+    socket.on("room:closed", () => onExit());
+    socket.on("error", (socketError: { message?: string }) => setError(socketError.message ?? "Errore di connessione."));
+    return () => {
+      socket.disconnect();
+    };
+  }, [onExit]);
+
+  async function closeRoom() {
+    await request(`/api/rooms/${room.code}/close`, { method: "POST" });
+    onExit();
+  }
+
+  async function leaveRoom() {
+    await request(`/api/rooms/${room.code}/leave`, { method: "POST" });
+    onExit();
+  }
+
+  return (
+    <main className="app-shell">
+      <section className="welcome-panel lobby-panel" aria-labelledby="room-title">
+        <p className="eyebrow">LOBBY</p>
+        <h1 id="room-title" className="room-code">{room.code}</h1>
+        <p className="intro">Condividi il codice con il tuo gruppo. La partita verra aggiunta nella prossima milestone.</p>
+        <div className="player-list">
+          <p className="panel-label">GIOCATORI {room.players.length} / 20</p>
+          {room.players.map((player) => (
+            <div className="player-row" key={player.id}><span className={player.connected ? "status-dot" : "status-dot offline"} />{player.nickname}{player.is_host && <small>HOST</small>}</div>
+          ))}
+        </div>
+        {error && <p className="form-error">{error}</p>}
+        {isHost ? <button className="submit-button" type="button" onClick={closeRoom}>Chiudi stanza</button> : <button className="submit-button" type="button" onClick={leaveRoom}>Esci dalla stanza</button>}
       </section>
     </main>
   );
