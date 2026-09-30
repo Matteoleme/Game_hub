@@ -5,10 +5,10 @@ from uuid import uuid4
 
 from app.database import SessionFactory, initialize_database
 from app.game.manager import game_manager
-from app.game.modes.anecdotes import public_state
+from app.game.modes.anecdotes import calculate_points, public_state
 from app.main import api
 from app.rooms.manager import RoomError, room_manager
-from app.rooms.persistence_models import GameRecord, RoomRecord
+from app.rooms.persistence_models import GameRecord, GameResultRecord, RoomRecord
 
 
 @pytest.fixture(autouse=True)
@@ -137,6 +137,14 @@ def test_anecdotes_voting_is_anonymous_validated_and_advances_stories() -> None:
     reveal_public = public_state(room.current_game)
     assert "authorPlayerId" not in reveal_public
     assert "authorPlayerId" not in reveal_public["currentStory"]
+    expected_points = calculate_points(room.current_game)
+    assert room.cumulative_scores == expected_points
+    assert room.current_game.mode_state["pointsByPlayer"] == expected_points
+
+    result = game_manager.finish_game(room)
+    assert result.points_by_player == expected_points
+    assert room.status == "LOBBY"
+from app.rooms.persistence_models import GameRecord, GameResultRecord, RoomRecord
 
 
 @pytest.mark.asyncio
@@ -160,7 +168,9 @@ async def test_api_persists_room_and_game_history() -> None:
     async with SessionFactory() as session:
         room_record = await session.scalar(select(RoomRecord).where(RoomRecord.code == code))
         game_record = await session.scalar(select(GameRecord).where(GameRecord.id == game_id))
+        result_record = await session.scalar(select(GameResultRecord).where(GameResultRecord.game_id == game_id))
 
     assert room_record is not None
     assert game_record is not None
     assert game_record.finished_at is not None
+    assert result_record is not None

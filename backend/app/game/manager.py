@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from app.game.models import Game, GameResult, GameStatus
-from app.game.modes.anecdotes import submit_story, submit_vote
+from app.game.modes.anecdotes import calculate_points, public_state, submit_story, submit_vote
 from app.game.modes.registry import get_mode
 from app.rooms.models import Room, RoomStatus
 from app.rooms.manager import MIN_PLAYERS, RoomError
@@ -42,14 +42,16 @@ class GameManager:
         if room.status != RoomStatus.GAME_RUNNING or game is None:
             raise RoomError("NO_ACTIVE_GAME", "Non c'e' una partita attiva.")
 
-        result = GameResult(game_id=game.id, points_by_player={player_id: 0 for player_id in room.players})
+        points_by_player = game.mode_state.get("pointsByPlayer", {player_id: 0 for player_id in room.players})
+        result = GameResult(game_id=game.id, points_by_player=points_by_player)
         game.status = GameStatus.FINISHED
         game.phase = "FINISHED"
         game.finished_at = result.finished_at
-        for player_id, points in result.points_by_player.items():
-            room.cumulative_scores[player_id] = room.cumulative_scores.get(player_id, 0) + points
-            if player_id in room.players:
-                room.players[player_id].score = room.cumulative_scores[player_id]
+        if not game.mode_state.get("scoreApplied", False):
+            for player_id, points in result.points_by_player.items():
+                room.cumulative_scores[player_id] = room.cumulative_scores.get(player_id, 0) + points
+                if player_id in room.players:
+                    room.players[player_id].score = room.cumulative_scores[player_id]
         room.completed_games.append(game)
         room.current_game = None
         room.selected_mode = None
@@ -76,7 +78,17 @@ class GameManager:
         if room.status != RoomStatus.GAME_RUNNING or game is None:
             raise RoomError("NO_ACTIVE_GAME", "Non c'e' una partita attiva.")
         try:
-            return submit_vote(game, player_id, target_player_id)
+            progress = submit_vote(game, player_id, target_player_id)
+            if game.phase == "REVEAL" and not game.mode_state.get("scoreApplied", False):
+                points = calculate_points(game)
+                game.mode_state["pointsByPlayer"] = points
+                game.mode_state["scoreApplied"] = True
+                for scored_player_id, scored_points in points.items():
+                    room.cumulative_scores[scored_player_id] = room.cumulative_scores.get(scored_player_id, 0) + scored_points
+                    if scored_player_id in room.players:
+                        room.players[scored_player_id].score = room.cumulative_scores[scored_player_id]
+                return public_state(game, room.players)
+            return progress
         except ValueError as error:
             messages = {
                 "VOTING_NOT_ACTIVE": "La fase di votazione non e' attiva.",

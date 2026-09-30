@@ -5,7 +5,7 @@ from typing import Any
 from app.config import get_settings
 from app.database import SessionFactory
 from app.game.manager import game_manager
-from app.game.persistence import persist_game_finished, persist_game_started
+from app.game.persistence import persist_game_finished, persist_game_result, persist_game_started
 from app.rooms.manager import RoomError, room_manager
 from app.rooms.schemas import room_response
 
@@ -169,6 +169,7 @@ async def game_finish(sid: str) -> None:
     finished_game = next(game for game in room.completed_games if game.id == game_result.game_id)
     async with SessionFactory() as session:
         await persist_game_finished(session, finished_game)
+        await persist_game_result(session, game_result)
     await sio.emit("game:finished", room_payload(room), room=room.code)
 
 

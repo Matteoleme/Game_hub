@@ -52,6 +52,6 @@ def room_response(room: Room) -> RoomResponse:
             for player in room.players.values()
         ],
         selected_mode=room.selected_mode,
-        current_game=game_response(room.current_game),
+        current_game=game_response(room.current_game, room.players),
         cumulative_scores=room.cumulative_scores.copy(),
     )

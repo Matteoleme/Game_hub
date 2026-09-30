@@ -96,6 +96,18 @@ Implementata la votazione Aneddoti:
 Il calcolo dei punti e la visualizzazione dell'autore/reveal sono riservati alla
 Milestone 7.
 
+## Milestone 7
+
+Implementati reveal e scoring Aneddoti:
+
+- reveal completo di testo, autore reale e voti ricevuti;
+- dettaglio di chi ha votato chi, con esito e punti per voto;
+- un punto per ogni identificazione corretta;
+- aggiornamento dei punteggi cumulativi nella room;
+- classifica mostrata nel frontend;
+- persistenza dei delta in `game_results`;
+- chiusura esplicita del reveal da parte dell'host e ritorno alla lobby.
+
 ## Avvio locale
 
 Prerequisiti: Python 3.12+ e Node.js 22+.

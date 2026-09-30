@@ -9,6 +9,7 @@ from app.database import get_session
 from app.game.manager import game_manager
 from app.game.persistence import (
     persist_game_finished,
+    persist_game_result,
     persist_game_started,
     persist_room,
     persist_room_closed,
@@ -209,6 +210,7 @@ async def finish_game(
         raise room_error(error) from error
     finished_game = next(game for game in room.completed_games if game.id == result.game_id)
     await persist_game_finished(session, finished_game)
+    await persist_game_result(session, result)
     from app.socket_server import sio
 
     await sio.emit("game:finished", room_response(room).model_dump(mode="json"), room=room.code)

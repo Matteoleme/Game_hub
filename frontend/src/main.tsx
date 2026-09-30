@@ -10,6 +10,8 @@ type Player = { id: string; nickname: string; is_host: boolean; connected: boole
 type Game = { id: string; room_id: string; mode: string; status: string; phase: string; started_at: string; finished_at: string | null; mode_state: Record<string, unknown> };
 type Room = { id: string; code: string; status: string; host_player_id: string; created_at: string; players: Player[]; selected_mode: string | null; current_game: Game | null; cumulative_scores: Record<string, number> };
 type GameMode = { id: string; name: string; available: boolean };
+type RevealVote = { voterPlayerId: string; voterNickname: string; targetPlayerId: string; targetNickname: string; correct: boolean; pointsEarned: number };
+type RevealStory = { id: string; text: string; authorPlayerId: string; authorNickname: string; votes: RevealVote[] };
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "";
 
@@ -269,6 +271,10 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
                 onError={setError}
               />
             )}
+            {room.current_game.mode === "anecdotes" && room.current_game.phase === "REVEAL" && (
+              <AnecdoteReveal room={room} />
+            )}
+            {room.current_game.phase === "REVEAL" && isHost && <button className="submit-button" type="button" onClick={finishGame}>Torna alla lobby</button>}
           </div>
         ) : isHost ? (
           <button className="submit-button" type="button" disabled={room.players.length < 3 || room.selected_mode === null} onClick={startGame}>Inizia partita</button>
@@ -279,6 +285,24 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
         {isHost ? <button className="submit-button" type="button" onClick={closeRoom}>Chiudi stanza</button> : <button className="submit-button" type="button" onClick={leaveRoom}>Esci dalla stanza</button>}
       </section>
     </main>
+  );
+}
+
+function AnecdoteReveal({ room }: { room: Room }) {
+  const state = room.current_game?.mode_state as { revealStories?: RevealStory[] };
+  return (
+    <div className="reveal-panel">
+      <p className="panel-label">REVEAL</p>
+      {state.revealStories?.map((story, index) => (
+        <article className="reveal-story" key={story.id}>
+          <p className="panel-label">ANEDDOTO {index + 1}</p>
+          <p className="reveal-text">{story.text}</p>
+          <strong>Autore: {story.authorNickname}</strong>
+          <div className="reveal-votes">{story.votes.map((vote) => <div className={vote.correct ? "reveal-vote correct" : "reveal-vote"} key={vote.voterPlayerId}><span>{vote.voterNickname} → {vote.targetNickname}</span><small>{vote.pointsEarned > 0 ? `+${vote.pointsEarned}` : "0"}</small></div>)}</div>
+        </article>
+      ))}
+      <div className="score-list"><p className="panel-label">PUNTEGGIO TOTALE</p>{room.players.map((player) => <div className="player-row" key={player.id}><span>{player.nickname}</span><strong>{player.score}</strong></div>)}</div>
+    </div>
   );
 }
 

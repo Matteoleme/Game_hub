@@ -1,9 +1,9 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.game.models import Game
+from app.game.models import Game, GameResult
 from app.rooms.models import Room
-from app.rooms.persistence_models import GameRecord, RoomRecord
+from app.rooms.persistence_models import GameRecord, GameResultRecord, RoomRecord
 from datetime import datetime, timezone
 
 
@@ -45,3 +45,13 @@ async def persist_game_finished(session: AsyncSession, game: Game) -> None:
     if record is not None:
         record.finished_at = game.finished_at
         await session.commit()
+
+
+async def persist_game_result(session: AsyncSession, result: GameResult) -> None:
+    session.add(
+        GameResultRecord(
+            game_id=result.game_id,
+            points_by_player=result.points_by_player,
+        )
+    )
+    await session.commit()

@@ -29,7 +29,7 @@ class GameModeResponse(BaseModel):
     available: bool
 
 
-def game_response(game: Game | None) -> GameResponse | None:
+def game_response(game: Game | None, players: dict | None = None) -> GameResponse | None:
     if game is None:
         return None
     return GameResponse(
@@ -40,7 +40,7 @@ def game_response(game: Game | None) -> GameResponse | None:
         phase=game.phase,
         started_at=game.started_at,
         finished_at=game.finished_at,
-        mode_state=public_state(game) if game.mode == "anecdotes" else {},
+        mode_state=public_state(game, players) if game.mode == "anecdotes" else {},
     )
 
 

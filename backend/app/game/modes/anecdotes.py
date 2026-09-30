@@ -77,7 +77,16 @@ def submit_vote(game: Game, voter_id: str, target_player_id: str) -> dict[str, A
     return public_state(game)
 
 
-def public_state(game: Game) -> dict[str, Any]:
+def calculate_points(game: Game) -> dict[str, int]:
+    points = {player_id: 0 for player_id in game.mode_state["player_ids"]}
+    for story in game.mode_state["stories"]:
+        for voter_id, target_id in story["votes"].items():
+            if target_id == story["authorPlayerId"]:
+                points[voter_id] += 1
+    return points
+
+
+def public_state(game: Game, players: dict[str, Any] | None = None) -> dict[str, Any]:
     submissions: dict[str, str] = game.mode_state["submissions"]
     state: dict[str, Any] = {
         "phase": game.phase,
@@ -98,4 +107,33 @@ def public_state(game: Game) -> dict[str, Any]:
             "eligibleVotes": len(game.mode_state["player_ids"]) - 1,
         }
     )
+    if game.phase == "REVEAL":
+        reveal_stories = []
+        for reveal_story in stories:
+            reveal_votes = []
+            for voter_id, target_id in reveal_story["votes"].items():
+                correct_vote = target_id == reveal_story["authorPlayerId"]
+                reveal_votes.append(
+                    {
+                        "voterPlayerId": voter_id,
+                        "voterNickname": players[voter_id].nickname if players and voter_id in players else voter_id,
+                        "targetPlayerId": target_id,
+                        "targetNickname": players[target_id].nickname if players and target_id in players else target_id,
+                        "correct": correct_vote,
+                        "pointsEarned": 1 if correct_vote else 0,
+                    }
+                )
+            reveal_stories.append(
+                {
+                    "id": reveal_story["id"],
+                    "text": reveal_story["text"],
+                    "authorPlayerId": reveal_story["authorPlayerId"],
+                    "authorNickname": players[reveal_story["authorPlayerId"]].nickname
+                    if players and reveal_story["authorPlayerId"] in players
+                    else reveal_story["authorPlayerId"],
+                    "votes": reveal_votes,
+                }
+            )
+        state["revealStories"] = reveal_stories
+        state["pointsByPlayer"] = game.mode_state.get("pointsByPlayer", {})
     return state

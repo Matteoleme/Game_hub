@@ -104,4 +104,18 @@ h1 { font-family: "Space Grotesk", sans-serif; font-size: clamp(3rem, 15vw, 7.5r
 .candidate-list { display: grid; gap: 8px; }
 
 .candidate-button { background: #f2c66d; border: 0; color: #10231f; cursor: pointer; font: inherit; font-weight: 700; padding: 14px 16px; text-align: left; }
+
+.reveal-panel { display: grid; gap: 14px; margin-top: 16px; }
+
+.reveal-story { background: rgba(246, 242, 233, 0.07); border: 1px solid rgba(246, 242, 233, 0.18); padding: 16px; }
+
+.reveal-text { font-size: 1.05rem; line-height: 1.5; }
+
+.reveal-votes { border-top: 1px solid rgba(246, 242, 233, 0.14); margin-top: 14px; padding-top: 8px; }
+
+.reveal-vote { display: flex; justify-content: space-between; padding: 8px 0; }
+
+.reveal-vote.correct { color: #89d7a4; }
+
+.score-list { background: rgba(8, 25, 21, 0.48); border: 1px solid rgba(246, 242, 233, 0.18); padding: 16px; }
 @media (min-width: 700px) { .app-shell { padding: 64px; } .welcome-panel { width: 100%; } }
