@@ -147,6 +147,17 @@ Implementati reveal e scoring Aneddoti:
 - persistenza dei delta in `game_results`;
 - chiusura esplicita del reveal da parte dell'host e ritorno alla lobby.
 
+## Milestone 11
+
+Completato il polish UI/UX mobile-first:
+
+- gerarchia visiva più chiara tra room, fase, azioni e punteggi;
+- controlli touch-friendly con stati hover, focus e disabled coerenti;
+- pannelli, reveal, storico e classifica con superfici e bordi uniformi;
+- animazione di ingresso discreta e rispetto di `prefers-reduced-motion`;
+- layout responsive per form, lobby, votazione e reveal;
+- contrasto e focus keyboard migliorati.
+
 ## Avvio locale
 
 Prerequisiti: Python 3.12+ e Node.js 22+.
