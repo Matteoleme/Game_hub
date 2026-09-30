@@ -56,6 +56,7 @@ def room_error(error: RoomError) -> HTTPException:
         "VOTE_ALREADY_SUBMITTED": status.HTTP_409_CONFLICT,
         "TARGET_PLAYER_NOT_IN_GAME": status.HTTP_400_BAD_REQUEST,
         "VOTING_NOT_ACTIVE": status.HTTP_409_CONFLICT,
+        "GAME_NOT_READY_TO_FINISH": status.HTTP_409_CONFLICT,
     }
     return HTTPException(
         status_code=code_to_status.get(error.code, status.HTTP_400_BAD_REQUEST),
@@ -101,6 +102,9 @@ async def join_room(
     except RoomError as error:
         raise room_error(error) from error
     set_player_cookie(response, token)
+    from app.socket_server import sio
+
+    await sio.emit("room:updated", room_response(room).model_dump(mode="json"), room=room.code)
     return room_response(room)
 
 

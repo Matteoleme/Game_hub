@@ -123,6 +123,18 @@ Implementata la riconnessione robusta:
 - disconnessione tardiva di una vecchia socket non sovrascrive la nuova connessione;
 - room invalidata o chiusa rimossa automaticamente dal ripristino locale.
 
+## Milestone 10
+
+Completato l'hardening del sistema:
+
+- `finish_game` accetta solo partite arrivate a `REVEAL`;
+- transizioni premature e tentativi di forzare il risultato vengono rifiutati;
+- join REST propagato in tempo reale alla lobby;
+- chiusura room via Socket.IO persistita in SQLite;
+- copertura per permessi host, target/voti invalidi, duplicati e self-vote;
+- copertura per reconnect con socket obsoleta e refresh browser;
+- suite completa eseguita nel container Docker.
+
 ## Milestone 7
 
 Implementati reveal e scoring Aneddoti:

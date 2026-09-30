@@ -33,13 +33,13 @@ async def test_create_and_join_room_enforces_unique_nickname() -> None:
     async with AsyncClient(transport=ASGITransport(app=api), base_url="http://test") as guest:
         joined = await guest.post(f"/api/rooms/{code.lower()}/join", json={"nickname": "Luca"})
         duplicate = await guest.post(f"/api/rooms/{code}/join", json={"nickname": "mArIo"})
+        refreshed = await guest.get(f"/api/rooms/{code}")
 
     assert created.status_code == 201
     assert joined.status_code == 200
     assert duplicate.status_code == 409
     assert duplicate.json()["detail"]["code"] == "NICKNAME_ALREADY_EXISTS"
     assert len(joined.json()["players"]) == 2
-    refreshed = await guest.get(f"/api/rooms/{code}")
     assert refreshed.status_code == 200
     assert refreshed.json()["code"] == code
     assert {player["nickname"] for player in refreshed.json()["players"]} == {"Mario", "Luca"}

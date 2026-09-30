@@ -49,6 +49,7 @@ def test_game_has_own_identity_and_returns_room_to_lobby_with_cumulative_scores(
     assert room.current_game is game
     assert room.status == "GAME_RUNNING"
 
+    game.phase = "REVEAL"
     result = game_manager.finish_game(room)
     assert result.game_id == game.id
     assert room.id == room_id
@@ -67,6 +68,15 @@ def test_game_requires_three_players() -> None:
         game_manager.start_game(room)
 
 
+def test_game_cannot_be_finished_before_reveal() -> None:
+    room = room_with_three_players()
+    game_manager.select_mode(room, "anecdotes")
+    game_manager.start_game(room)
+
+    with pytest.raises(RoomError, match="solo dopo il reveal"):
+        game_manager.finish_game(room)
+
+
 def test_multiple_games_keep_room_players_and_cumulative_scores() -> None:
     room = room_with_three_players()
     room_id = room.id
@@ -76,6 +86,7 @@ def test_multiple_games_keep_room_players_and_cumulative_scores() -> None:
     first_game = game_manager.start_game(room)
     first_game.mode_state["pointsByPlayer"] = {player_ids[0]: 2, player_ids[1]: 1, player_ids[2]: 0}
     first_game.mode_state["scoreApplied"] = True
+    first_game.phase = "REVEAL"
     for player_id, points in first_game.mode_state["pointsByPlayer"].items():
         room.cumulative_scores[player_id] = points
         room.players[player_id].score = points
@@ -88,6 +99,7 @@ def test_multiple_games_keep_room_players_and_cumulative_scores() -> None:
     assert set(room.players) == set(player_ids)
     assert [game.id for game in room.completed_games] == [first_game.id]
     assert room.cumulative_scores == {player_ids[0]: 2, player_ids[1]: 1, player_ids[2]: 0}
+    second_game.phase = "REVEAL"
     game_manager.finish_game(room)
     assert len(room.completed_games) == 2
     assert room.status == "LOBBY"
@@ -190,6 +202,8 @@ async def test_api_persists_room_and_game_history() -> None:
         await host.post(f"/api/rooms/{code}/mode", json={"mode_id": "anecdotes"})
         started = await host.post(f"/api/rooms/{code}/start")
         game_id = started.json()["current_game"]["id"]
+        room_snapshot = (await host.get(f"/api/rooms/{code}")).json()
+        room_manager.get_room(code).current_game.phase = "REVEAL"
         await host.post(f"/api/rooms/{code}/finish")
         history_response = await host.get(f"/api/rooms/{code}/history")
 

@@ -5,7 +5,7 @@ from typing import Any
 from app.config import get_settings
 from app.database import SessionFactory
 from app.game.manager import game_manager
-from app.game.persistence import persist_game_finished, persist_game_result, persist_game_started
+from app.game.persistence import persist_game_finished, persist_game_result, persist_game_started, persist_room_closed
 from app.rooms.manager import RoomError, room_manager
 from app.rooms.schemas import room_response
 
@@ -112,6 +112,8 @@ async def room_close(sid: str) -> None:
     except RoomError as error:
         await emit_room_error(sid, error)
         return
+    async with SessionFactory() as session:
+        await persist_room_closed(session, closed_room)
     await sio.emit("room:closed", room_payload(closed_room), room=room.code)
 
 

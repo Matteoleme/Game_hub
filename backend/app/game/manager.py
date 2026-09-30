@@ -41,6 +41,8 @@ class GameManager:
         game = room.current_game
         if room.status != RoomStatus.GAME_RUNNING or game is None:
             raise RoomError("NO_ACTIVE_GAME", "Non c'e' una partita attiva.")
+        if game.phase != "REVEAL":
+            raise RoomError("GAME_NOT_READY_TO_FINISH", "La partita puo terminare solo dopo il reveal.")
 
         points_by_player = game.mode_state.get("pointsByPlayer", {player_id: 0 for player_id in room.players})
         result = GameResult(game_id=game.id, points_by_player=points_by_player)
