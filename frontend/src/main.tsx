@@ -206,16 +206,22 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
   }, []);
 
   useEffect(() => {
-    const socket = io(apiBaseUrl || window.location.origin, { withCredentials: true });
-    socket.on("room:updated", (updatedRoom: Room) => setRoom(updatedRoom));
-    socket.on("game:started", (updatedRoom: Room) => setRoom(updatedRoom));
-    socket.on("game:finished", (updatedRoom: Room) => setRoom(updatedRoom));
+    const socket = io(apiBaseUrl || window.location.origin, { withCredentials: true, autoConnect: true });
+    socket.on("room:updated", (updatedRoom: Room) => {
+      setRoom((currentRoom) => {
+        if (currentRoom && updatedRoom.code === currentRoom.code) {
+          return updatedRoom;
+        }
+        return updatedRoom;
+      });
+    });
     socket.on("room:closed", () => onExit());
     socket.on("error", (socketError: { message?: string }) => setError(socketError.message ?? "Errore di connessione."));
     return () => {
+      socket.removeAllListeners();
       socket.disconnect();
     };
-  }, []);
+  }, [onExit]);
 
   async function closeRoom() {
     await request(`/api/rooms/${room.code}/close`, { method: "POST" });
@@ -229,8 +235,7 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
 
   async function selectMode(modeId: string) {
     try {
-      const updatedRoom = await request<Room>(`/api/rooms/${room.code}/mode`, { method: "POST", body: JSON.stringify({ mode_id: modeId }) });
-      setRoom(updatedRoom);
+      await request<Room>(`/api/rooms/${room.code}/mode`, { method: "POST", body: JSON.stringify({ mode_id: modeId }) });
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Impossibile selezionare la modalita.");
     }
@@ -238,16 +243,14 @@ function RoomLobby({ room: initialRoom, isHost, onExit }: { room: Room; isHost: 
 
   async function startGame() {
     try {
-      const updatedRoom = await request<Room>(`/api/rooms/${room.code}/start`, { method: "POST" });
-      setRoom(updatedRoom);
+      await request<Room>(`/api/rooms/${room.code}/start`, { method: "POST" });
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Impossibile iniziare la partita.");
     }
   }
 
   async function finishGame() {
-    const updatedRoom = await request<Room>(`/api/rooms/${room.code}/finish`, { method: "POST" });
-    setRoom(updatedRoom);
+    await request<Room>(`/api/rooms/${room.code}/finish`, { method: "POST" });
   }
 
   return (
@@ -356,8 +359,8 @@ function AnecdoteVoting({ room, votedStoryIds, onVoted, onError }: { room: Room;
   async function vote(targetPlayerId: string) {
     onError("");
     try {
-      const updatedRoom = await request<Room>(`/api/rooms/${room.code}/vote`, { method: "POST", body: JSON.stringify({ target_player_id: targetPlayerId }) });
-      onVoted(updatedRoom, currentStory.id);
+      await request<Room>(`/api/rooms/${room.code}/vote`, { method: "POST", body: JSON.stringify({ target_player_id: targetPlayerId }) });
+      onVoted(room, currentStory.id);
     } catch (requestError) {
       onError(requestError instanceof Error ? requestError.message : "Voto non valido.");
     }
@@ -383,11 +386,11 @@ function AnecdoteWriting({ room, disabled, onSubmitted }: { room: Room; disabled
     event.preventDefault();
     setError("");
     try {
-      const updatedRoom = await request<Room>(`/api/rooms/${room.code}/story`, {
+      await request<Room>(`/api/rooms/${room.code}/story`, {
         method: "POST",
         body: JSON.stringify({ text }),
       });
-      onSubmitted(updatedRoom);
+      onSubmitted(room);
       setText("");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Impossibile inviare l'aneddoto.");

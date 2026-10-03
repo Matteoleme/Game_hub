@@ -102,9 +102,9 @@ async def join_room(
     except RoomError as error:
         raise room_error(error) from error
     set_player_cookie(response, token)
-    from app.socket_server import sio
+    from app.socket_server import emit_room_update
 
-    await sio.emit("room:updated", room_response(room).model_dump(mode="json"), room=room.code)
+    await emit_room_update(room, room_code=room.code)
     return room_response(room)
 
 
@@ -188,9 +188,9 @@ async def select_mode(
         game_manager.select_mode(room, payload.mode_id)
     except RoomError as error:
         raise room_error(error) from error
-    from app.socket_server import sio
+    from app.socket_server import emit_room_update
 
-    await sio.emit("room:updated", room_response(room).model_dump(mode="json"), room=room.code)
+    await emit_room_update(room, room_code=room.code)
     return room_response(room)
 
 
@@ -208,10 +208,9 @@ async def start_game(
             raise room_error(error) from error
         raise room_error(RoomError("GAME_MODE_UNAVAILABLE", "Questa modalita non e' disponibile.")) from error
     await persist_game_started(session, game)
-    from app.socket_server import sio
+    from app.socket_server import emit_room_update
 
-    payload = room_response(room).model_dump(mode="json")
-    await sio.emit("game:started", payload, room=room.code)
+    await emit_room_update(room, room_code=room.code, legacy_events=("game:started",))
     return room_response(room)
 
 
@@ -229,9 +228,9 @@ async def finish_game(
     finished_game = next(game for game in room.completed_games if game.id == result.game_id)
     await persist_game_finished(session, finished_game)
     await persist_game_result(session, result)
-    from app.socket_server import sio
+    from app.socket_server import emit_room_update
 
-    await sio.emit("game:finished", room_response(room).model_dump(mode="json"), room=room.code)
+    await emit_room_update(room, room_code=room.code, legacy_events=("game:finished",))
     return room_response(room)
 
 
@@ -252,9 +251,9 @@ async def submit_story(
         game_manager.submit_anecdote(room, player.id, payload.text)
     except RoomError as error:
         raise room_error(error) from error
-    from app.socket_server import sio
+    from app.socket_server import emit_room_update
 
-    await sio.emit("writing:updated", room_response(room).model_dump(mode="json"), room=room.code)
+    await emit_room_update(room, room_code=room.code, legacy_events=("writing:updated",))
     return room_response(room)
 
 
@@ -275,7 +274,7 @@ async def submit_vote(
         game_manager.submit_vote(room, player.id, payload.target_player_id)
     except RoomError as error:
         raise room_error(error) from error
-    from app.socket_server import sio
+    from app.socket_server import emit_room_update
 
-    await sio.emit("voting:updated", room_response(room).model_dump(mode="json"), room=room.code)
+    await emit_room_update(room, room_code=room.code, legacy_events=("voting:updated",))
     return room_response(room)
